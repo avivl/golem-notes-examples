@@ -9,6 +9,6 @@ to your own.
 
 | Part | Folder | Post |
 |---|---|---|
-| 2 | 02-remote-agents | (link when published) |
+| 1 | 01-the-map | (link when published) |
 
 MIT licensed. Questions and fixes welcome as issues.

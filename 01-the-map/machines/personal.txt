@@ -1,0 +1,4 @@
+# Fragments for the personal laptop, in build order.
+00-header.md
+10-voice.md
+20-git.md

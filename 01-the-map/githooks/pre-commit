@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Block a commit when the built AGENTS.md is older than its fragments.
+# Enable with: git config core.hooksPath 01-the-map/githooks
+set -euo pipefail
+make -C "$(git rev-parse --show-toplevel)/01-the-map" check

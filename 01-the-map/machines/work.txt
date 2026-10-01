@@ -1,0 +1,5 @@
+# Fragments for the work laptop: everything personal has, plus work rules.
+00-header.md
+10-voice.md
+20-git.md
+50-work-only.md
