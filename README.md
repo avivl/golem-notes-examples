@@ -10,5 +10,6 @@ to your own.
 | Part | Folder | Post |
 |---|---|---|
 | 1 | 01-the-map | (link when published) |
+| 2 | 02-remote-agents | (link when published) |
 
 MIT licensed. Questions and fixes welcome as issues.
