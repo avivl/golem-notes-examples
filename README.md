@@ -10,6 +10,6 @@ to your own.
 | Part | Folder | Post |
 |---|---|---|
 | 1 | 01-the-map | (link when published) |
-| 2 | 02-remote-agents | (link when published) |
+| 2 | 02-remote-agents | [Close the laptop, the agent keeps working](https://golemnotes.substack.com/p/close-the-laptop-the-agent-keeps?utm_source=github&utm_medium=referral&utm_campaign=agentic-setup-02) |
 
 MIT licensed. Questions and fixes welcome as issues.
