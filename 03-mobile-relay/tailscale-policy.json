@@ -1,0 +1,8 @@
+{
+  "tagOwners": {
+    "tag:home": ["autogroup:admin"]
+  },
+  "acls": [
+    { "action": "accept", "src": ["autogroup:member"], "dst": ["tag:home:22"] }
+  ]
+}
