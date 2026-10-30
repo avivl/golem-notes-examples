@@ -1,0 +1,37 @@
+#!/bin/bash
+# review-pr <github-pr-url>
+# Changes into the PR's local clone (<root>/<org>/<repo>) and starts a coding
+# agent with the /review-pr command against that PR.
+#
+#   REVIEW_PR_ROOT   where your clones live      (default: ~/GitHub)
+#   REVIEW_PR_AGENT  the agent command to start  (default: agent, Cursor's CLI)
+
+set -euo pipefail
+
+PR_URL="${1:-}"
+
+if [ -z "$PR_URL" ]; then
+    echo "Usage: $(basename "$0") <github-pr-url>" >&2
+    exit 1
+fi
+
+if [[ "$PR_URL" =~ github\.com/([^/]+)/([^/]+)/pull/[0-9]+ ]]; then
+    ORG="${BASH_REMATCH[1]}"
+    REPO="${BASH_REMATCH[2]}"
+else
+    echo "Error: not a valid GitHub PR URL: $PR_URL" >&2
+    exit 1
+fi
+
+REPO_DIR="${REVIEW_PR_ROOT:-$HOME/GitHub}/$ORG/$REPO"
+
+if [ ! -d "$REPO_DIR" ]; then
+    echo "Error: repo directory not found: $REPO_DIR" >&2
+    exit 1
+fi
+
+# The agent command may have words of its own, like "wt-agent agent".
+read -r -a AGENT <<<"${REVIEW_PR_AGENT:-agent}"
+
+cd "$REPO_DIR"
+exec "${AGENT[@]}" "/review-pr $PR_URL"

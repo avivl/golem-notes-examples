@@ -1,0 +1,78 @@
+#!/bin/bash
+# fmreview-prompt [--repo owner/name] <pr>...
+# Prints the message I send to a Firstmate first mate to review PRs: one
+# read-only scout per PR, each in its own pane, all pinned to the reviewer
+# model. Paste it into the first mate yourself. This script launches nothing.
+#
+# A PR can be a URL, owner/repo#123, owner/repo:123, or a bare number with
+# --repo.
+#
+#   FMREVIEW_HARNESS  default: omp
+#   FMREVIEW_MODEL    default: openai-codex/gpt-6.1-sol
+#   FMREVIEW_EFFORT   default: high
+#   FMREVIEW_CHARTER  default: data/review-charter.md
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+
+: "${FMREVIEW_HARNESS:=omp}"
+: "${FMREVIEW_MODEL:=openai-codex/gpt-6.1-sol}"
+: "${FMREVIEW_EFFORT:=high}"
+: "${FMREVIEW_CHARTER:=data/review-charter.md}"
+
+default_repo=""
+prs=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --repo)
+        default_repo="${2:-}"
+        shift 2
+        ;;
+    -h | --help)
+        echo "usage: fmreview-prompt [--repo owner/name] <pr>..."
+        exit 0
+        ;;
+    *)
+        prs+=("$1")
+        shift
+        ;;
+    esac
+done
+
+if [ "${#prs[@]}" -eq 0 ]; then
+    echo "fmreview-prompt: give at least one PR" >&2
+    exit 2
+fi
+
+norm=()
+for p in "${prs[@]}"; do
+    n=$("$here/pr-ref" "$p" "$default_repo") || {
+        echo "fmreview-prompt: cannot parse $p" >&2
+        exit 2
+    }
+    [ -n "$n" ] || {
+        echo "fmreview-prompt: $p needs --repo" >&2
+        exit 2
+    }
+    norm+=("$n")
+done
+
+profile="harness $FMREVIEW_HARNESS"
+[ -n "$FMREVIEW_MODEL" ] && profile="$profile, model $FMREVIEW_MODEL"
+[ -n "$FMREVIEW_EFFORT" ] && profile="$profile, effort $FMREVIEW_EFFORT"
+
+printf 'ahoy\n\n'
+printf 'Dispatch one SCOUT per pull request below. One scout each, in parallel, each in its own pane.\n\n'
+printf 'Pull requests:\n'
+for n in "${norm[@]}"; do
+    printf -- '- %s PR #%s\n' "${n%%#*}" "${n##*#}"
+done
+printf '\nProfile for every one of these scouts: %s.\n\n' "$profile"
+printf 'Register each repo as local-only if it is not registered yet.\n\n'
+printf 'Every brief must carry the full contents of %s in its Firstmate spec. ' "$FMREVIEW_CHARTER"
+printf 'The charter is binding: these scouts are read-only and must not comment, review, approve, request changes, push, or merge anything on GitHub. '
+printf 'Reading the PR with gh is the only GitHub interaction allowed.\n\n'
+printf 'When a scout finishes, relay its verdict and findings to me and then STOP. '
+printf 'Do not act on any recommendation, do not open follow-up tasks, and do not tear the scout down until I say so.\n'

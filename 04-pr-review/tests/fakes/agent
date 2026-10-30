@@ -1,0 +1,6 @@
+#!/bin/sh
+# A fake agent CLI: prints where it ran and what it got.
+echo "cwd=$(pwd -P)"
+for a in "$@"; do
+    echo "arg=$a"
+done

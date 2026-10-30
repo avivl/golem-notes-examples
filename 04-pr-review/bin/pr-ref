@@ -1,0 +1,31 @@
+#!/bin/bash
+# pr-ref <token> [default-repo]
+# Normalizes a PR reference to owner/repo#number.
+#
+#   https://github.com/acme/api/pull/123  -> acme/api#123
+#   acme/api#123                          -> acme/api#123
+#   acme/api:123                          -> acme/api#123
+#   123 acme/api                          -> acme/api#123
+#
+# The ":" form exists because in zsh with extendedglob, an unquoted # is a glob
+# operator, so acme/api#123 has to be quoted and acme/api:123 does not.
+#
+# Exit 0 with empty output: a bare number with no default repo.
+# Exit 1: not a PR reference.
+
+set -euo pipefail
+
+t="${1:-}"
+default_repo="${2:-}"
+
+if [[ "$t" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+)([/?#].*)?$ ]]; then
+    printf '%s#%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+elif [[ "$t" =~ ^([^/#:]+/[^/#:]+)[#:]([0-9]+)$ ]]; then
+    printf '%s#%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+elif [[ "$t" =~ ^[0-9]+$ ]]; then
+    if [ -n "$default_repo" ]; then
+        printf '%s#%s\n' "$default_repo" "$t"
+    fi
+else
+    exit 1
+fi

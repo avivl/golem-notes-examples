@@ -1,0 +1,121 @@
+#!/bin/bash
+# review-pr-many-herdr <github-pr-url> [<github-pr-url> ...]
+# Creates one herdr pane per PR in a "PR reviews" workspace and runs
+# review-pr in each.
+#
+# herdr has no way to take a whole pane layout at once, so the panes are built
+# with one `herdr pane split` at a time, as a row-major grid: argument order
+# reads left to right, top to bottom, and panes stay roughly square instead of
+# turning into narrow columns.
+
+set -euo pipefail
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: $(basename "$0") <github-pr-url> [<github-pr-url> ...]" >&2
+    exit 1
+fi
+
+for pr_url in "$@"; do
+    if [[ ! "$pr_url" =~ github\.com/[^/]+/[^/]+/pull/[0-9]+ ]]; then
+        echo "Error: not a valid GitHub PR URL: $pr_url" >&2
+        exit 1
+    fi
+done
+
+# Capture rather than pipe into grep -q: under `set -o pipefail`, grep -q exits
+# on the first match, herdr dies of SIGPIPE, and the pipeline reports failure
+# even though the server is up.
+server_status="$(herdr status server 2>/dev/null || true)"
+case "$server_status" in
+*"status: running"*) ;;
+*)
+    echo "Error: no herdr server is running. Start one with: herdr" >&2
+    exit 1
+    ;;
+esac
+
+# Read a dotted path out of a herdr JSON response on stdin.
+json_get() {
+    python3 -c '
+import json
+import sys
+
+node = json.load(sys.stdin)
+for key in sys.argv[1].split("."):
+    node = node[key]
+print(node)
+' "$1"
+}
+
+# Quote a value as a single shell word for the command sent into a pane.
+sh_quote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# https://github.com/org/repo/pull/123 -> org/repo#123
+pr_label() {
+    printf '%s' "$1" |
+        sed -nE 's#.*github\.com/([^/]+)/([^/]+)/pull/([0-9]+).*#\1/\2\#\3#p'
+}
+
+# Carve one slice off a pane that still holds $3 slices, and print the new
+# pane. herdr's --ratio is the share the ORIGINAL pane keeps (splitting a
+# 20-row pane with --ratio 0.75 leaves it 15 rows and gives 5 away), so 1/n
+# keeps every slice the same size.
+split_off() {
+    herdr pane split "$1" --direction "$2" \
+        --ratio "$(awk "BEGIN { printf \"%.6f\", 1 / $3 }")" --no-focus |
+        json_get result.pane.pane_id
+}
+
+panes=()
+
+# Lay out $2 panes over pane $1 as a row-major grid, and collect the leaf ids
+# into `panes` in argument order.
+build_grid() {
+    local root="$1" count="$2"
+    local cols rows base rem carve r c row_count
+    local row_panes=()
+
+    cols=$(awk "BEGIN { printf \"%d\", int(sqrt($count - 1)) + 1 }")
+    rows=$(((count + cols - 1) / cols))
+    base=$((count / rows))
+    rem=$((count % rows))
+
+    # Equal rows stacked out of the root pane.
+    carve="$root"
+    for ((r = rows; r > 1; r--)); do
+        row_panes+=("$carve")
+        carve=$(split_off "$carve" down "$r")
+    done
+    row_panes+=("$carve")
+
+    # Then each row into its own columns, left to right. Earlier rows take the
+    # extra pane when the count does not divide evenly.
+    for ((r = 0; r < rows; r++)); do
+        row_count=$((base + (r < rem ? 1 : 0)))
+        carve="${row_panes[$r]}"
+        for ((c = row_count; c > 1; c--)); do
+            panes+=("$carve")
+            carve=$(split_off "$carve" right "$c")
+        done
+        panes+=("$carve")
+    done
+}
+
+root_pane=$(herdr workspace create --cwd "$HOME" --label "PR reviews" --focus |
+    json_get result.root_pane.pane_id)
+
+build_grid "$root_pane" "$#"
+
+i=0
+for pr_url in "$@"; do
+    # A manual pane name replaces the detected agent label on the border. That
+    # is the point: the PR is more useful there than "cursor". herdr still
+    # shows the agent state in the sidebar.
+    herdr pane rename "${panes[$i]}" "$(pr_label "$pr_url")" >/dev/null
+    herdr pane run "${panes[$i]}" "review-pr $(sh_quote "$pr_url")" >/dev/null
+    i=$((i + 1))
+done
+
+echo "Launched ${#panes[@]} review pane(s) in the 'PR reviews' workspace."
