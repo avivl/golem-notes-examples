@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""A fake herdr for the tests.
+
+It answers the few commands review-pr-many-herdr uses, logs every call as one
+JSON line to $FAKE_LOG, and keeps pane geometry in $FAKE_STATE, so the tests
+can check the real layout, not just the calls.
+
+Geometry follows herdr's rule: --ratio is the share the ORIGINAL pane keeps.
+Splitting "down" keeps the top part, "right" keeps the left part.
+"""
+import json
+import os
+import sys
+
+args = sys.argv[1:]
+log = os.environ["FAKE_LOG"]
+state_path = os.environ["FAKE_STATE"]
+
+with open(log, "a") as f:
+    f.write(json.dumps(args) + "\n")
+
+
+def load():
+    try:
+        with open(state_path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"next": 1, "panes": {}}
+
+
+def save(state):
+    with open(state_path, "w") as f:
+        json.dump(state, f)
+
+
+def opt(name):
+    return args[args.index(name) + 1]
+
+
+if args[:2] == ["status", "server"]:
+    if os.environ.get("FAKE_HERDR_DOWN"):
+        print("status: stopped")
+    else:
+        # Plenty of output after the match, like the real one, so a
+        # `| grep -q` would close the pipe early.
+        print("status: running")
+        for i in range(2000):
+            print(f"session {i}: idle")
+    sys.exit(0)
+
+if args[:2] == ["workspace", "create"]:
+    state = {"next": 2, "panes": {"p1": [0.0, 0.0, 1.0, 1.0]}}
+    save(state)
+    print(json.dumps({"result": {"root_pane": {"pane_id": "p1"}}}))
+    sys.exit(0)
+
+if args[:2] == ["pane", "split"]:
+    state = load()
+    pane = args[2]
+    direction = opt("--direction")
+    ratio = float(opt("--ratio"))
+    x, y, w, h = state["panes"][pane]
+    new = f"p{state['next']}"
+    state["next"] += 1
+    if direction == "down":
+        state["panes"][pane] = [x, y, w, h * ratio]
+        state["panes"][new] = [x, y + h * ratio, w, h * (1 - ratio)]
+    elif direction == "right":
+        state["panes"][pane] = [x, y, w * ratio, h]
+        state["panes"][new] = [x + w * ratio, y, w * (1 - ratio), h]
+    else:
+        print(f"fake herdr: bad direction {direction}", file=sys.stderr)
+        sys.exit(2)
+    save(state)
+    print(json.dumps({"result": {"pane": {"pane_id": new}}}))
+    sys.exit(0)
+
+if args[:2] in (["pane", "rename"], ["pane", "run"]):
+    print(json.dumps({"result": {"ok": True}}))
+    sys.exit(0)
+
+print(f"fake herdr: unexpected call {args}", file=sys.stderr)
+sys.exit(2)
